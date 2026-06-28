@@ -1,0 +1,11 @@
+{
+  "name": "webml-hand-tracker",
+  "version": "1.0.0",
+  "description": "Tracker de mão WebML com TensorFlow.js e servidor Node.js",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "author": "",
+  "license": "MIT"
+}
