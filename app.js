@@ -229,8 +229,10 @@ function getVideoDimensions() {
   return { width: videoWidth, height: videoHeight };
 }
 
+// Substitua APENAS esta função no seu app.js
 function drawOverlay(landmarks, dims) {
   if (!landmarks) return;
+  
   overlayCtx.lineWidth = 2;
   overlayCtx.strokeStyle = '#38bdf8';
   overlayCtx.fillStyle = '#38bdf8';
@@ -247,8 +249,11 @@ function drawOverlay(landmarks, dims) {
     overlayCtx.beginPath();
     path.forEach((index, idx) => {
       const [x, y] = landmarks[index];
-      const px = x * scaleX; 
+      
+      // CORREÇÃO: Invertendo o X para casar com o efeito espelho da webcam
+      const px = overlay.width - (x * scaleX); 
       const py = y * scaleY;
+      
       if (idx === 0) overlayCtx.moveTo(px, py);
       else overlayCtx.lineTo(px, py);
     });
@@ -257,8 +262,11 @@ function drawOverlay(landmarks, dims) {
   
   landmarks.forEach((point) => {
     const [x, y] = point;
-    const px = x * scaleX;
+    
+    // CORREÇÃO: Aplicando a mesma inversão nas juntas (pontos)
+    const px = overlay.width - (x * scaleX);
     const py = y * scaleY;
+    
     overlayCtx.beginPath();
     overlayCtx.arc(px, py, 4, 0, Math.PI * 2);
     overlayCtx.fill();
