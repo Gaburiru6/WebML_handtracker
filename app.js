@@ -210,17 +210,17 @@ function setRobotStatus(text, hidden = false) {
 }
 
 function resizeCanvases() {
-  // Ajusta o vídeo e o overlay baseados no painel esquerdo
-  const vRect = video.getBoundingClientRect();
-  overlay.width = vRect.width;
-  overlay.height = vRect.height;
-  videoWidth = vRect.width || 640;
-  videoHeight = vRect.height || 480;
-  
-  // Ajusta o WebGL 3D estritamente com base no seu pai (painel direito) para evitar colapsos
+  // 1. CORREÇÃO DO DESALINHAMENTO: O canvas de rastreamento deve ter 
+  // a resolução nativa exata do vídeo. Assim o CSS corta os dois perfeitamente.
+  if (video.videoWidth) {
+    overlay.width = video.videoWidth;
+    overlay.height = video.videoHeight;
+  }
+
+  // 2. O canvas 3D continua se adaptando dinamicamente à sua própria div
   const rRect = robotCanvas.parentElement.getBoundingClientRect();
-  robotCanvas.width = rRect.width || vRect.width;
-  robotCanvas.height = rRect.height || vRect.height;
+  robotCanvas.width = rRect.width || 640;
+  robotCanvas.height = rRect.height || 480;
   
   syncRendererSize();
 }
@@ -229,7 +229,6 @@ function getVideoDimensions() {
   return { width: videoWidth, height: videoHeight };
 }
 
-// Substitua APENAS esta função no seu app.js
 function drawOverlay(landmarks, dims) {
   if (!landmarks) return;
   
@@ -237,12 +236,13 @@ function drawOverlay(landmarks, dims) {
   overlayCtx.strokeStyle = '#38bdf8';
   overlayCtx.fillStyle = '#38bdf8';
   
+  // Como o canvas agora tem o tamanho exato da câmera, a escala se torna 1:1 nativamente
   const scaleX = overlay.width / dims.width;
   const scaleY = overlay.height / dims.height;
 
   const lines = [
     [0, 1, 2, 3, 4], [0, 5, 6, 7, 8], [0, 9, 10, 11, 12],
-    [0, 13, 14, 15, 16], [0, 17, 18, 19, 20],
+    [0, 13, 14, 15, 16], [0, 17, 18, 19, 20]
   ];
   
   lines.forEach((path) => {
@@ -250,7 +250,7 @@ function drawOverlay(landmarks, dims) {
     path.forEach((index, idx) => {
       const [x, y] = landmarks[index];
       
-      // CORREÇÃO: Invertendo o X para casar com o efeito espelho da webcam
+      // Espelhamento exato mantido, agora sem distorções de esmagamento
       const px = overlay.width - (x * scaleX); 
       const py = y * scaleY;
       
@@ -262,8 +262,6 @@ function drawOverlay(landmarks, dims) {
   
   landmarks.forEach((point) => {
     const [x, y] = point;
-    
-    // CORREÇÃO: Aplicando a mesma inversão nas juntas (pontos)
     const px = overlay.width - (x * scaleX);
     const py = y * scaleY;
     
