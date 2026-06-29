@@ -1,11 +1,57 @@
 const video = document.getElementById('webcam');
 const overlay = document.getElementById('overlay');
 const statusLabel = document.getElementById('status');
-const robotCanvas = document.getElementById('robot');
 const robotStatus = document.getElementById('robotStatus');
 
 const overlayCtx = overlay.getContext('2d');
-const robotCtx = robotCanvas.getContext('2d');
+const robotCanvas = document.getElementById('robot'); // Pega o canvas corretamente
+
+// REMOVIDO: const robotCtx = robotCanvas.getContext('2d'); -> Conflitava com o WebGL
+
+// 1. Criar a Cena, Câmera e Renderizador WebGL
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#0b1220');
+
+// CORRIGIDO: robot.clientWidth -> robotCanvas.clientWidth
+const camera = new THREE.PerspectiveCamera(60, robotCanvas.clientWidth / robotCanvas.clientHeight, 0.1, 1000);
+camera.position.set(0, 0, 30); 
+
+const renderer = new THREE.WebGLRenderer({ canvas: robotCanvas, antialias: true });
+// CORRIGIDO: robot.clientWidth -> robotCanvas.clientWidth
+renderer.setSize(robotCanvas.clientWidth, robotCanvas.clientHeight);
+
+// 2. Adicionar Iluminação
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+scene.add(ambientLight);
+
+const directionalLight = new THREE.DirectionalLight(0x38bdf8, 1.2);
+directionalLight.position.set(10, 20, 15);
+scene.add(directionalLight);
+
+// 3. Criar os Nós Mecânicos (21 Esferas para os Landmarks)
+const joints = [];
+const jointGeometry = new THREE.SphereGeometry(0.6, 32, 32);
+const jointMaterial = new THREE.MeshStandardMaterial({
+    color: '#38bdf8',
+    roughness: 0.2,
+    metalness: 0.8,
+    emissive: '#155e75'
+});
+
+for (let i = 0; i < 21; i++) {
+    const sphere = new THREE.Mesh(jointGeometry, jointMaterial);
+    scene.add(sphere);
+    joints.push(sphere);
+}
+
+// Redimensionar a cena caso o layout mude
+window.addEventListener('resize', () => {
+    const width = robotCanvas.clientWidth;
+    const height = robotCanvas.clientHeight;
+    renderer.setSize(width, height);
+    camera.aspect = width / height;
+    camera.updateProjectionMatrix();
+});
 
 let model = null;
 let videoWidth = 640;
@@ -78,6 +124,7 @@ function getVideoDimensions() {
 function drawOverlay(landmarks) {
   overlayCtx.clearRect(0, 0, overlay.width, overlay.height);
   if (!landmarks) return;
+  
   overlayCtx.lineWidth = 2;
   overlayCtx.strokeStyle = '#38bdf8';
   overlayCtx.fillStyle = '#38bdf8';
@@ -116,128 +163,30 @@ function drawOverlay(landmarks) {
 }
 
 function drawRobotHand(landmarks) {
-  // Limpa e preenche o fundo com a cor padrão do seu wrapper [cite: 1, 5]
-  robotCtx.clearRect(0, 0, robotCanvas.width, robotCanvas.height);
-  robotCtx.fillStyle = '#0b1220'; 
-  robotCtx.fillRect(0, 0, robotCanvas.width, robotCanvas.height);
-
-  if (!landmarks) return;
+  if (!landmarks) {
+    // Se não houver mão, esconde as juntas
+    joints.forEach(j => j.position.set(0, -999, 0));
+    renderer.render(scene, camera);
+    return;
+  }
 
   const videoDims = getVideoDimensions();
-  // Calcula a proporção para espelhar e ajustar a escala, semelhante ao overlay 
-  const scaleX = robotCanvas.width / videoDims.width;
-  const scaleY = robotCanvas.height / videoDims.height;
+  const scaleX = 40 / videoDims.width;
+  const scaleY = 30 / videoDims.height;
+  const scaleZ = 0.05;
 
-  // Função auxiliar para converter os pontos e manter a mão espelhada corretamente
-  const getPoint = (index) => {
-    return {
-      x: robotCanvas.width - landmarks[index][0] * scaleX,
-      y: landmarks[index][1] * scaleY
-    };
-  };
+  landmarks.forEach((lm, idx) => {
+    const targetX = -(lm[0] * scaleX - 20);
+    const targetY = -(lm[1] * scaleY - 15);
+    const targetZ = -lm[2] * scaleZ;        
 
-  // 1. Desenhar a "Placa" da Palma Metálica
-  const palmIndices = [0, 1, 5, 9, 13, 17];
-  robotCtx.beginPath();
-  palmIndices.forEach((idx, i) => {
-    const p = getPoint(idx);
-    if (i === 0) robotCtx.moveTo(p.x, p.y);
-    else robotCtx.lineTo(p.x, p.y);
-  });
-  robotCtx.closePath();
-  robotCtx.fillStyle = '#1e293b'; // Tom escuro original para a palma 
-  robotCtx.fill();
-  robotCtx.lineWidth = 3;
-  robotCtx.strokeStyle = '#38bdf8'; // Cor neon do seu CSS [cite: 1, 5]
-  robotCtx.stroke();
-
-  // 2. Desenhar as Falanges (Pistões robóticos)
-  const connections = [
-    [1, 2], [2, 3], [3, 4],       // Polegar
-    [5, 6], [6, 7], [7, 8],       // Indicador
-    [9, 10], [10, 11], [11, 12],  // Médio
-    [13, 14], [14, 15], [15, 16], // Anelar
-    [17, 18], [18, 19], [19, 20]  // Mínimo
-  ];
-
-  connections.forEach(conn => {
-    const start = getPoint(conn[0]);
-    const end = getPoint(conn[1]);
-    
-    // Base grossa do pistão
-    robotCtx.beginPath();
-    robotCtx.moveTo(start.x, start.y);
-    robotCtx.lineTo(end.x, end.y);
-    robotCtx.lineWidth = 10;
-    robotCtx.lineCap = 'round';
-    robotCtx.strokeStyle = '#334155'; // Metal fosco
-    robotCtx.stroke();
-    
-    // Núcleo de energia interno (Neon)
-    robotCtx.beginPath();
-    robotCtx.moveTo(start.x, start.y);
-    robotCtx.lineTo(end.x, end.y);
-    robotCtx.lineWidth = 3;
-    robotCtx.strokeStyle = '#38bdf8'; // Destaque neon 
-    robotCtx.stroke();
+    joints[idx].position.x += (targetX - joints[idx].position.x) * 0.4;
+    joints[idx].position.y += (targetY - joints[idx].position.y) * 0.4;
+    joints[idx].position.z += (targetZ - joints[idx].position.z) * 0.4;
   });
 
-  // 3. Desenhar as Articulações (Leds/Juntas)
-  landmarks.forEach((_, idx) => {
-    const p = getPoint(idx);
-    
-    robotCtx.beginPath();
-    robotCtx.arc(p.x, p.y, 6, 0, Math.PI * 2);
-    robotCtx.fillStyle = '#111827';
-    robotCtx.fill();
-    robotCtx.lineWidth = 2;
-    robotCtx.strokeStyle = '#38bdf8';
-    robotCtx.stroke();
-    
-    // Luz de status central
-    robotCtx.beginPath();
-    robotCtx.arc(p.x, p.y, 2, 0, Math.PI * 2);
-    robotCtx.fillStyle = '#ffffff';
-    robotCtx.fill();
-  });
+  renderer.render(scene, camera);
 }
-
-// function drawFinger(ctx, startX, startY, angle, lengths, width) {
-//   let x = startX;
-//   let y = startY;
-//   let currentAngle = angle;
-
-//   lengths.forEach((length, idx) => {
-//     ctx.save();
-//     ctx.translate(x, y);
-//     ctx.rotate(currentAngle);
-//     ctx.fillStyle = '#111827';
-//     ctx.strokeStyle = '#38bdf8';
-//     ctx.lineWidth = 3;
-//     ctx.beginPath();
-//     if (typeof ctx.roundRect === 'function') {
-//       ctx.roundRect(0, -width / 2, length, width, width * 0.4);
-//     } else {
-//       const radius = Math.min(width * 0.4, width / 2);
-//       ctx.moveTo(0 + radius, -width / 2);
-//       ctx.lineTo(length - radius, -width / 2);
-//       ctx.quadraticCurveTo(length, -width / 2, length, -width / 2 + radius);
-//       ctx.lineTo(length, width / 2 - radius);
-//       ctx.quadraticCurveTo(length, width / 2, length - radius, width / 2);
-//       ctx.lineTo(radius, width / 2);
-//       ctx.quadraticCurveTo(0, width / 2, 0, width / 2 - radius);
-//       ctx.lineTo(0, -width / 2 + radius);
-//       ctx.quadraticCurveTo(0, -width / 2, radius, -width / 2);
-//     }
-//     ctx.fill();
-//     ctx.stroke();
-//     ctx.restore();
-
-//     x += Math.cos(currentAngle) * length;
-//     y += Math.sin(currentAngle) * length;
-//     currentAngle += 0.18;
-//   });
-// }
 
 async function initWebcam() {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -284,7 +233,10 @@ async function runDetection() {
     } else {
       handVisible = false;
       overlayCtx.clearRect(0, 0, overlay.width, overlay.height);
-      robotCtx.clearRect(0, 0, robotCanvas.width, robotCanvas.height);
+      
+      // CORRIGIDO: Substitui o robotCtx.clearRect por atualizar a cena 3D com "null"
+      drawRobotHand(null);
+      
       setRobotStatus('Aguardando mão...', false);
     }
   } catch (error) {
