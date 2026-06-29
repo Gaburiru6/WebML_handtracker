@@ -116,93 +116,128 @@ function drawOverlay(landmarks) {
 }
 
 function drawRobotHand(landmarks) {
+  // Limpa e preenche o fundo com a cor padrão do seu wrapper [cite: 1, 5]
   robotCtx.clearRect(0, 0, robotCanvas.width, robotCanvas.height);
-  robotCtx.fillStyle = '#0b1220';
+  robotCtx.fillStyle = '#0b1220'; 
   robotCtx.fillRect(0, 0, robotCanvas.width, robotCanvas.height);
 
+  if (!landmarks) return;
+
   const videoDims = getVideoDimensions();
-  const palm = getPalmCenter(landmarks);
-  const targetX = robotCanvas.width * (1 - palm[0] / videoDims.width);
-  const targetY = robotCanvas.height * (palm[1] / videoDims.height);
+  // Calcula a proporção para espelhar e ajustar a escala, semelhante ao overlay 
+  const scaleX = robotCanvas.width / videoDims.width;
+  const scaleY = robotCanvas.height / videoDims.height;
 
-  const baseX = targetX;
-  const baseY = targetY;
-  const palmRadius = Math.min(robotCanvas.width, robotCanvas.height) * 0.18;
+  // Função auxiliar para converter os pontos e manter a mão espelhada corretamente
+  const getPoint = (index) => {
+    return {
+      x: robotCanvas.width - landmarks[index][0] * scaleX,
+      y: landmarks[index][1] * scaleY
+    };
+  };
 
-  robotCtx.save();
-  robotCtx.translate(baseX, baseY);
-
-  robotCtx.fillStyle = '#1e293b';
-  robotCtx.strokeStyle = '#38bdf8';
-  robotCtx.lineWidth = 4;
+  // 1. Desenhar a "Placa" da Palma Metálica
+  const palmIndices = [0, 1, 5, 9, 13, 17];
   robotCtx.beginPath();
-  robotCtx.ellipse(0, 0, palmRadius, palmRadius * 0.9, 0, 0, Math.PI * 2);
+  palmIndices.forEach((idx, i) => {
+    const p = getPoint(idx);
+    if (i === 0) robotCtx.moveTo(p.x, p.y);
+    else robotCtx.lineTo(p.x, p.y);
+  });
+  robotCtx.closePath();
+  robotCtx.fillStyle = '#1e293b'; // Tom escuro original para a palma 
   robotCtx.fill();
+  robotCtx.lineWidth = 3;
+  robotCtx.strokeStyle = '#38bdf8'; // Cor neon do seu CSS [cite: 1, 5]
   robotCtx.stroke();
 
-  const fingerAnimation = {
-    thumb: 0.55,
-    index: 0.35,
-    middle: 0.15,
-    ring: -0.05,
-    pinky: -0.25,
-  };
+  // 2. Desenhar as Falanges (Pistões robóticos)
+  const connections = [
+    [1, 2], [2, 3], [3, 4],       // Polegar
+    [5, 6], [6, 7], [7, 8],       // Indicador
+    [9, 10], [10, 11], [11, 12],  // Médio
+    [13, 14], [14, 15], [15, 16], // Anelar
+    [17, 18], [18, 19], [19, 20]  // Mínimo
+  ];
 
-  const curlValues = {
-    thumb: Math.max(0, Math.min(1, fingerCurl(landmarks, 'thumb') * 1.4)),
-    index: fingerCurl(landmarks, 'index'),
-    middle: fingerCurl(landmarks, 'middle'),
-    ring: fingerCurl(landmarks, 'ring'),
-    pinky: fingerCurl(landmarks, 'pinky'),
-  };
-
-  const fingerLengths = [palmRadius * 0.9, palmRadius * 0.8, palmRadius * 0.75];
-  Object.keys(fingerAnimation).forEach((fingerName, index) => {
-    const baseAngle = fingerAnimation[fingerName] * Math.PI;
-    const flex = curlValues[fingerName];
-    const finalAngle = baseAngle - flex * 0.9;
-    drawFinger(robotCtx, 0, 0, finalAngle, fingerLengths, 20 + index * 3);
+  connections.forEach(conn => {
+    const start = getPoint(conn[0]);
+    const end = getPoint(conn[1]);
+    
+    // Base grossa do pistão
+    robotCtx.beginPath();
+    robotCtx.moveTo(start.x, start.y);
+    robotCtx.lineTo(end.x, end.y);
+    robotCtx.lineWidth = 10;
+    robotCtx.lineCap = 'round';
+    robotCtx.strokeStyle = '#334155'; // Metal fosco
+    robotCtx.stroke();
+    
+    // Núcleo de energia interno (Neon)
+    robotCtx.beginPath();
+    robotCtx.moveTo(start.x, start.y);
+    robotCtx.lineTo(end.x, end.y);
+    robotCtx.lineWidth = 3;
+    robotCtx.strokeStyle = '#38bdf8'; // Destaque neon 
+    robotCtx.stroke();
   });
 
-  robotCtx.restore();
-}
-
-function drawFinger(ctx, startX, startY, angle, lengths, width) {
-  let x = startX;
-  let y = startY;
-  let currentAngle = angle;
-
-  lengths.forEach((length, idx) => {
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(currentAngle);
-    ctx.fillStyle = '#111827';
-    ctx.strokeStyle = '#38bdf8';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    if (typeof ctx.roundRect === 'function') {
-      ctx.roundRect(0, -width / 2, length, width, width * 0.4);
-    } else {
-      const radius = Math.min(width * 0.4, width / 2);
-      ctx.moveTo(0 + radius, -width / 2);
-      ctx.lineTo(length - radius, -width / 2);
-      ctx.quadraticCurveTo(length, -width / 2, length, -width / 2 + radius);
-      ctx.lineTo(length, width / 2 - radius);
-      ctx.quadraticCurveTo(length, width / 2, length - radius, width / 2);
-      ctx.lineTo(radius, width / 2);
-      ctx.quadraticCurveTo(0, width / 2, 0, width / 2 - radius);
-      ctx.lineTo(0, -width / 2 + radius);
-      ctx.quadraticCurveTo(0, -width / 2, radius, -width / 2);
-    }
-    ctx.fill();
-    ctx.stroke();
-    ctx.restore();
-
-    x += Math.cos(currentAngle) * length;
-    y += Math.sin(currentAngle) * length;
-    currentAngle += 0.18;
+  // 3. Desenhar as Articulações (Leds/Juntas)
+  landmarks.forEach((_, idx) => {
+    const p = getPoint(idx);
+    
+    robotCtx.beginPath();
+    robotCtx.arc(p.x, p.y, 6, 0, Math.PI * 2);
+    robotCtx.fillStyle = '#111827';
+    robotCtx.fill();
+    robotCtx.lineWidth = 2;
+    robotCtx.strokeStyle = '#38bdf8';
+    robotCtx.stroke();
+    
+    // Luz de status central
+    robotCtx.beginPath();
+    robotCtx.arc(p.x, p.y, 2, 0, Math.PI * 2);
+    robotCtx.fillStyle = '#ffffff';
+    robotCtx.fill();
   });
 }
+
+// function drawFinger(ctx, startX, startY, angle, lengths, width) {
+//   let x = startX;
+//   let y = startY;
+//   let currentAngle = angle;
+
+//   lengths.forEach((length, idx) => {
+//     ctx.save();
+//     ctx.translate(x, y);
+//     ctx.rotate(currentAngle);
+//     ctx.fillStyle = '#111827';
+//     ctx.strokeStyle = '#38bdf8';
+//     ctx.lineWidth = 3;
+//     ctx.beginPath();
+//     if (typeof ctx.roundRect === 'function') {
+//       ctx.roundRect(0, -width / 2, length, width, width * 0.4);
+//     } else {
+//       const radius = Math.min(width * 0.4, width / 2);
+//       ctx.moveTo(0 + radius, -width / 2);
+//       ctx.lineTo(length - radius, -width / 2);
+//       ctx.quadraticCurveTo(length, -width / 2, length, -width / 2 + radius);
+//       ctx.lineTo(length, width / 2 - radius);
+//       ctx.quadraticCurveTo(length, width / 2, length - radius, width / 2);
+//       ctx.lineTo(radius, width / 2);
+//       ctx.quadraticCurveTo(0, width / 2, 0, width / 2 - radius);
+//       ctx.lineTo(0, -width / 2 + radius);
+//       ctx.quadraticCurveTo(0, -width / 2, radius, -width / 2);
+//     }
+//     ctx.fill();
+//     ctx.stroke();
+//     ctx.restore();
+
+//     x += Math.cos(currentAngle) * length;
+//     y += Math.sin(currentAngle) * length;
+//     currentAngle += 0.18;
+//   });
+// }
 
 async function initWebcam() {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
