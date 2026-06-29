@@ -4,44 +4,79 @@ const statusLabel = document.getElementById('status');
 const robotStatus = document.getElementById('robotStatus');
 
 const overlayCtx = overlay.getContext('2d');
-const robotCanvas = document.getElementById('robot'); // Pega o canvas corretamente
-
-// REMOVIDO: const robotCtx = robotCanvas.getContext('2d'); -> Conflitava com o WebGL
+const robotCanvas = document.getElementById('robot'); 
 
 // 1. Criar a Cena, Câmera e Renderizador WebGL
 const scene = new THREE.Scene();
 scene.background = new THREE.Color('#0b1220');
 
-// CORRIGIDO: robot.clientWidth -> robotCanvas.clientWidth
 const camera = new THREE.PerspectiveCamera(60, robotCanvas.clientWidth / robotCanvas.clientHeight, 0.1, 1000);
 camera.position.set(0, 0, 30); 
 
 const renderer = new THREE.WebGLRenderer({ canvas: robotCanvas, antialias: true });
-// CORRIGIDO: robot.clientWidth -> robotCanvas.clientWidth
 renderer.setSize(robotCanvas.clientWidth, robotCanvas.clientHeight);
 
-// 2. Adicionar Iluminação
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+// 2. Adicionar Iluminação Avançada
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
 scene.add(ambientLight);
 
-const directionalLight = new THREE.DirectionalLight(0x38bdf8, 1.2);
+const directionalLight = new THREE.DirectionalLight(0x38bdf8, 1.5);
 directionalLight.position.set(10, 20, 15);
 scene.add(directionalLight);
 
-// 3. Criar os Nós Mecânicos (21 Esferas para os Landmarks)
+const pointLight = new THREE.PointLight(0xffffff, 0.5, 50);
+pointLight.position.set(0, 0, 20);
+scene.add(pointLight);
+
+// 3. Criar as Articulações (Esferas)
 const joints = [];
-const jointGeometry = new THREE.SphereGeometry(0.6, 32, 32);
+const jointGeometry = new THREE.SphereGeometry(0.5, 32, 32);
 const jointMaterial = new THREE.MeshStandardMaterial({
     color: '#38bdf8',
-    roughness: 0.2,
-    metalness: 0.8,
-    emissive: '#155e75'
+    roughness: 0.1,
+    metalness: 0.9,
+    emissive: '#0369a1' 
 });
 
 for (let i = 0; i < 21; i++) {
     const sphere = new THREE.Mesh(jointGeometry, jointMaterial);
     scene.add(sphere);
     joints.push(sphere);
+}
+
+// 4. Criar a Estrutura Óssea/Pistões (Cilindros)
+// Definição das conexões padrões do Handpose do dedão ao mindinho
+const bonePairs = [
+  [0, 1], [1, 2], [2, 3], [3, 4],       // Polegar
+  [0, 5], [5, 6], [6, 7], [7, 8],       // Indicador
+  [5, 9], [9, 10], [10, 11], [11, 12],  // Médio
+  [9, 13], [13, 14], [14, 15], [15, 16], // Anelar
+  [13, 17], [0, 17], [17, 18], [18, 19], [19, 20] // Mínimo e base da palma
+];
+
+const bones = [];
+// Criamos um cilindro padrão apontado para cima. Nós vamos escalacioná-lo e rotacioná-lo em tempo real.
+const boneGeometry = new THREE.CylinderGeometry(0.2, 0.3, 1, 16); 
+const boneMaterial = new THREE.MeshStandardMaterial({
+    color: '#475569', // Metal fosco industrial
+    roughness: 0.4,
+    metalness: 0.7
+});
+
+bonePairs.forEach(() => {
+    const cylinder = new THREE.Mesh(boneGeometry, boneMaterial);
+    scene.add(cylinder);
+    bones.push(cylinder);
+});
+
+// Função matemática para posicionar e rotacionar o cilindro entre dois pontos 3D
+function updateBone(cylinder, vStart, vEnd) {
+    const distance = vStart.distanceTo(vEnd);
+    cylinder.position.copy(vStart).add(vEnd).multiplyScalar(0.5); // Posiciona no ponto médio
+    
+    // Alinha o cilindro vertical com a direção do osso
+    cylinder.scale.set(1, distance, 1);
+    cylinder.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), vEnd.clone().sub(vStart).normalize());
 }
 
 // Redimensionar a cena caso o layout mude
@@ -57,14 +92,6 @@ let model = null;
 let videoWidth = 640;
 let videoHeight = 480;
 let handVisible = false;
-
-const fingerKeypoints = {
-  thumb: [1, 2, 3, 4],
-  index: [5, 6, 7, 8],
-  middle: [9, 10, 11, 12],
-  ring: [13, 14, 15, 16],
-  pinky: [17, 18, 19, 20],
-};
 
 function setStatus(text, hidden = false) {
   statusLabel.textContent = text;
@@ -84,34 +111,6 @@ function resizeCanvases() {
   robotCanvas.height = rect.height;
   videoWidth = rect.width;
   videoHeight = rect.height;
-}
-
-function distance(a, b) {
-  return Math.hypot(a[0] - b[0], a[1] - b[1]);
-}
-
-function fingerCurl(landmarks, finger) {
-  const indexes = fingerKeypoints[finger];
-  const a = landmarks[indexes[1]];
-  const b = landmarks[indexes[2]];
-  const c = landmarks[indexes[3]];
-  const ab = [b[0] - a[0], b[1] - a[1]];
-  const bc = [c[0] - b[0], c[1] - b[1]];
-  const abNorm = Math.hypot(ab[0], ab[1]);
-  const bcNorm = Math.hypot(bc[0], bc[1]);
-  if (!abNorm || !bcNorm) return 0;
-  const cos = (ab[0] * bc[0] + ab[1] * bc[1]) / (abNorm * bcNorm);
-  return Math.max(0, Math.min(1, (1 - cos) / 2));
-}
-
-function getPalmCenter(landmarks) {
-  const base = [0, 0];
-  const points = [0, 5, 9, 13, 17].map(index => landmarks[index]);
-  points.forEach(point => {
-    base[0] += point[0];
-    base[1] += point[1];
-  });
-  return [base[0] / points.length, base[1] / points.length];
 }
 
 function getVideoDimensions() {
@@ -164,8 +163,9 @@ function drawOverlay(landmarks) {
 
 function drawRobotHand(landmarks) {
   if (!landmarks) {
-    // Se não houver mão, esconde as juntas
+    // Esconde tudo se a mão sumir
     joints.forEach(j => j.position.set(0, -999, 0));
+    bones.forEach(b => b.position.set(0, -999, 0));
     renderer.render(scene, camera);
     return;
   }
@@ -173,16 +173,25 @@ function drawRobotHand(landmarks) {
   const videoDims = getVideoDimensions();
   const scaleX = 40 / videoDims.width;
   const scaleY = 30 / videoDims.height;
-  const scaleZ = 0.05;
+  const scaleZ = 0.06; // Leve aumento na percepção de profundidade
 
+  // 1. Atualizar posição dos nós das articulações
   landmarks.forEach((lm, idx) => {
     const targetX = -(lm[0] * scaleX - 20);
     const targetY = -(lm[1] * scaleY - 15);
     const targetZ = -lm[2] * scaleZ;        
 
-    joints[idx].position.x += (targetX - joints[idx].position.x) * 0.4;
-    joints[idx].position.y += (targetY - joints[idx].position.y) * 0.4;
-    joints[idx].position.z += (targetZ - joints[idx].position.z) * 0.4;
+    // Amortecimento suave para os nós
+    joints[idx].position.x += (targetX - joints[idx].position.x) * 0.45;
+    joints[idx].position.y += (targetY - joints[idx].position.y) * 0.45;
+    joints[idx].position.z += (targetZ - joints[idx].position.z) * 0.45;
+  });
+
+  // 2. Atualizar os segmentos cilíndricos conectando as articulações
+  bonePairs.forEach((pair, idx) => {
+      const startJoint = joints[pair[0]].position;
+      const endJoint = joints[pair[1]].position;
+      updateBone(bones[idx], startJoint, endJoint);
   });
 
   renderer.render(scene, camera);
@@ -190,7 +199,7 @@ function drawRobotHand(landmarks) {
 
 async function initWebcam() {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    setStatus('Câmera não disponível no navegador. Use um navegador moderno.', false);
+    setStatus('Câmera não disponível no navegador.', false);
     return;
   }
 
@@ -207,12 +216,8 @@ async function initWebcam() {
 
 async function initModel() {
   setStatus('Carregando modelo de mão...', false);
-  if (typeof handpose === 'undefined' || !handpose.load) {
-    throw new Error('handpose não está carregado. Verifique os scripts em index.html.');
-  }
-
   model = await handpose.load();
-  setStatus('Modelo carregado. Permita a câmera e mova a mão na frente.', true);
+  setStatus('Modelo carregado.', true);
   setRobotStatus('Aguardando mão...', false);
 }
 
@@ -233,15 +238,11 @@ async function runDetection() {
     } else {
       handVisible = false;
       overlayCtx.clearRect(0, 0, overlay.width, overlay.height);
-      
-      // CORRIGIDO: Substitui o robotCtx.clearRect por atualizar a cena 3D com "null"
       drawRobotHand(null);
-      
       setRobotStatus('Aguardando mão...', false);
     }
   } catch (error) {
     console.error('Erro de detecção:', error);
-    setStatus('Erro de detecção. Veja o console do navegador.', false);
   }
 
   requestAnimationFrame(runDetection);
@@ -257,5 +258,5 @@ async function startApp() {
 window.addEventListener('resize', resizeCanvases);
 startApp().catch(error => {
   console.error(error);
-  setStatus('Erro ao iniciar a aplicação. Veja o console para detalhes.', false);
+  setStatus('Erro ao iniciar a aplicação.', false);
 });
