@@ -3,42 +3,26 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>WebML Tracker de Mão</title>
+  <title>Joystick Pacman IA</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <main>
-    <section class="hero">
-      <h1>Tracker de mão com TensorFlow.js</h1>
-      <p>Use a webcam para detectar sua mão enquanto a mão robótica imita seus gestos.</p>
-      <p class="subtitle">Aberto em um navegador moderno com câmera.</p>
-    </section>
+    <header class="hero">
+      <h1>Controle Pacman por Gestos</h1>
+      <p id="status" class="status">Carregando inteligência artificial...</p>
+    </header>
 
-    <section class="grid">
-      <article class="panel">
-        <h2>Webcam</h2>
-        <div class="video-wrapper">
-          <video id="webcam" autoplay playsinline muted></video>
-          <canvas id="overlay"></canvas>
-          <div id="status" class="status">Carregando modelo...</div>
-        </div>
-      </article>
-
-      <article class="panel">
-        <h2>Mão robótica</h2>
-        <div class="robot-wrapper">
-          <canvas id="robot"></canvas>
-          <div id="robotStatus" class="status">Aguardando mão...</div>
-        </div>
-      </article>
+    <section class="fullscreen-container">
+      <div class="video-wrapper">
+        <video id="webcam" autoplay playsinline muted></video>
+        <canvas id="overlay"></canvas>
+      </div>
     </section>
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
-  
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/hand-pose-detection@2.0.1/dist/hand-pose-detection.min.js"></script>
-  
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   
   <script src="app.js"></script>
 </body>
